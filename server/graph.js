@@ -156,7 +156,7 @@ export async function readGraphEvidence(workspaceId,terms,{driver:graphDriver=ge
     const seeds=await tx.run(`MATCH (n) WHERE n.workspaceId=$workspaceId
       WITH n,toLower(coalesce(n.name,'')+' '+coalesce(n.title,'')+' '+coalesce(n.text,'')+' '+coalesce(n.description,'')+' '+coalesce(n.summary,'')) AS content
       WITH n,size([term IN $terms WHERE content CONTAINS term]) AS score
-      WHERE score>0 RETURN elementId(n) AS id ORDER BY score DESC,elementId(n) LIMIT 8`,{workspaceId,terms});
+      WHERE score>0 RETURN elementId(n) AS id ORDER BY score DESC,CASE WHEN n:Chunk THEN 0 ELSE 1 END,elementId(n) LIMIT 8`,{workspaceId,terms});
     const seedIds=seeds.records.map(r=>r.get('id'));
     if(!seedIds.length)return {nodes:[],edges:[],seedIds};
     const result=await tx.run(`MATCH (n) WHERE n.workspaceId=$workspaceId AND elementId(n) IN $seedIds

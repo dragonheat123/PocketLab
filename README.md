@@ -23,6 +23,12 @@ Suggested demo sequence:
 
 The attempted web-host deployment is stopped. Daytona's current organization network policy blocks the app host from reaching Neo4j and Nosana; it does not affect this local app's connections. No hosted URL is advertised as the demo.
 
+## Project video
+
+[![Watch the Pocket Lab launch video](brag-output/brag.jpg)](brag-output/brag.mp4)
+
+[Watch or download the 25-second video](brag-output/brag.mp4) · [Storyboard and editable source](brag-output/README.md) · [Music credits](brag-output/CREDITS.md)
+
 ## Project presentation
 
 [Download the editable slides](docs/slides/pocket-lab.pptx) · [Project concept](CONCEPT.md) · [Architecture](archi.md)

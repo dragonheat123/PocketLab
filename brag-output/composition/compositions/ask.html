@@ -1,0 +1,57 @@
+<template><style>@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(assets/fonts/dm-sans-400.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(assets/fonts/dm-sans-500.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(assets/fonts/dm-sans-600.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(assets/fonts/dm-sans-700.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(assets/fonts/manrope-400.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(assets/fonts/manrope-600.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(assets/fonts/manrope-700.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url(assets/fonts/manrope-800.ttf) format('truetype');
+}
+*{box-sizing:border-box;margin:0}#root{position:absolute;inset:0;overflow:hidden;background:var(--color-ground,#f7f8f4);color:var(--color-ink,#293128);font-family:'DM Sans',sans-serif}.stage{position:absolute;inset:0}h1,h2,h3{font-family:'Manrope';font-weight:800;letter-spacing:-3px}.sage{color:#526c40}.muted{color:#657363}.brand{position:absolute;display:flex;align-items:center;gap:24px}.mark{display:grid;place-items:center;background:#29372b;color:#e6f0ca;width:78px;height:88px;border-radius:20px 20px 20px 6px;font:700 74px 'Manrope';letter-spacing:-8px;padding-right:7px}.brand strong{font:800 37px 'Manrope';letter-spacing:-2px}.pill{border:2px solid #d5dfc8;border-radius:50px;padding:12px 25px;background:#f0f3eb;color:#526c40;font-size:30px}#a-title{position:absolute;left:192px;top:125px;font-size:72px;line-height:1.25;width:1536px}#a-panel{position:absolute;left:192px;top:260px;width:1536px;height:650px;border:2px solid #d5dfc8;border-radius:22px;background:#fbfcf8;padding:35px 42px;box-shadow:0 24px 70px #29372b0d}#a-panel-title{font:800 34px 'Manrope';color:#526c40}#a-prompt{position:absolute;left:42px;top:105px;width:1045px;height:80px;border:2px solid #d5dfc8;background:#f7f8f4;border-radius:10px;display:flex;align-items:center;padding:0 25px;font-size:31px;white-space:nowrap}#a-button{position:absolute;left:1110px;top:105px;width:380px;height:80px;border:0;border-radius:10px;background:#29372b;color:#f7f8f4;font:600 28px 'DM Sans'}#a-card{position:absolute;left:42px;top:225px;width:1448px;height:380px;border-left:5px solid #8fa878;background:#f0f3eb;padding:25px 35px}#a-card h3{font-size:40px;letter-spacing:-1.5px;color:#29372b;margin-bottom:20px}.a-row{display:flex;gap:20px;margin:12px 0;font-size:29px;line-height:1.5}.a-row b{width:165px;flex-shrink:0;font-size:28px;color:#526c40}.a-row span{color:#435638}#a-evidence{font-size:28px;color:#526c40;position:absolute;left:36px;bottom:28px}#a-review{position:absolute;right:35px;bottom:26px;background:#fbfcf8;border:2px solid #c1d0b2;color:#435638;border-radius:8px;padding:13px 22px;font-size:28px}#a-note{position:absolute;left:200px;top:944px;font-size:28px;color:#657363}#a-cursor{position:absolute;left:1460px;top:445px;width:42px;height:55px;z-index:4}</style><div data-hf-id="hf-ltkc" id="root" data-composition-id="ask" data-width="1920" data-height="1080"><div data-hf-id="hf-06em" id="ask-stage" class="stage"><h2 data-hf-id="hf-25gg" id="a-title">Ask the graph. <span data-hf-id="hf-s8dk" class="sage">Find your next test.</span></h2><div data-hf-id="hf-7esn" id="a-panel"><div data-hf-id="hf-qz7a" id="a-panel-title">Ask your knowledge graph</div><div data-hf-id="hf-jqha" id="a-prompt">How does degradation change our strategy?</div><button data-hf-id="hf-mm76" id="a-button">AI: propose experiments</button><div data-hf-id="hf-pz24" id="a-card" data-hold><h3 data-hf-id="hf-yw03" id="a-card-title">Degradation-aware dispatch</h3><div data-hf-id="hf-qkzk" id="a-hypothesis" class="a-row"><b data-hf-id="hf-9zsz">Hypothesis</b><span data-hf-id="hf-k8nu">Wear penalties reduce unnecessary cycling.</span></div><div data-hf-id="hf-bojr" id="a-baseline" class="a-row"><b data-hf-id="hf-3d4y">Baseline</b><span data-hf-id="hf-zh6i">No wear penalty.</span></div><div data-hf-id="hf-26vh" id="a-metrics" class="a-row"><b data-hf-id="hf-bxx2">Metrics</b><span data-hf-id="hf-q3si">Return / cycling / violations</span></div><p data-hf-id="hf-qj7p" id="a-evidence">Evidence: [G1] [G2]</p><div data-hf-id="hf-iylq" id="a-review">Review and save experiment</div></div></div><svg data-hf-id="hf-xe5v" id="a-cursor" viewBox="0 0 42 55" aria-hidden="true" data-layout-ignore><path data-hf-id="hf-1rrm" d="M3 2 L3 42 L14 32 L22 51 L31 47 L23 29 L38 29Z" fill="#29372b" stroke="#fbfcf8" stroke-width="3"/></svg><p data-hf-id="hf-qbhn" id="a-note">Illustrative proposal. Review before saving.</p></div></div><script>const tl=gsap.timeline({paused:true});tl.fromTo('#a-title',{opacity:0,x:0,y:22},{opacity:1,x:0,y:0,duration:0.5,ease:'power4.out'},0);tl.fromTo('#a-panel',{opacity:0,x:80,y:0},{opacity:1,x:0,y:0,duration:0.6,ease:'power4.out'},0.05);tl.fromTo('#a-prompt',{clipPath:'inset(0 100% 0 0)'},{clipPath:'inset(0 0% 0 0)',duration:1,ease:'none'},.45);tl.fromTo('#a-cursor',{opacity:0,x:150,y:140},{opacity:1,x:0,y:0,duration:.6,ease:'power2.inOut'},1);tl.fromTo('#a-button',{scale:1},{scale:.97,duration:.1,ease:'power2.in'},1.75).to('#a-button',{scale:1,duration:.16,ease:'power2.out'},1.85);tl.to('#a-cursor',{opacity:0,duration:.18},2);tl.fromTo('#a-card',{opacity:0,x:0,y:20},{opacity:1,x:0,y:0,duration:0.45,ease:'power4.out'},2);tl.fromTo('#a-hypothesis',{opacity:0,x:0,y:0},{opacity:1,x:0,y:0,duration:0.25,ease:'power4.out'},2.3);tl.fromTo('#a-baseline',{opacity:0,x:0,y:0},{opacity:1,x:0,y:0,duration:0.25,ease:'power4.out'},2.55);tl.fromTo('#a-metrics',{opacity:0,x:0,y:0},{opacity:1,x:0,y:0,duration:0.25,ease:'power4.out'},2.8);tl.fromTo('#a-evidence',{opacity:0,x:0,y:0},{opacity:1,x:0,y:0,duration:0.3,ease:'power4.out'},3.05);tl.fromTo('#a-review',{opacity:0,x:0,y:0},{opacity:1,x:0,y:0,duration:0.3,ease:'power4.out'},3.3);tl.fromTo('#a-note',{opacity:0,x:0,y:0},{opacity:1,x:0,y:0,duration:0.3,ease:'power4.out'},0.5);tl.to('#ask-stage',{opacity:0,scale:.97,duration:.3,ease:'power3.in'},8.88);window.__timelines["ask"]=tl;</script></template>

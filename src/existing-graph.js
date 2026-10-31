@@ -69,6 +69,8 @@ function drawGraph(root,data,refresh,focusEntityId){
   }
   function inspect(node){
     selected=node;highlight();
+    // Put the selected node above its neighbors so its visible center stays draggable.
+    viewport.appendChild(nodeEls[nodes.indexOf(node)]);
     const edges=links.filter(e=>e.source.id===node.id||e.target.id===node.id);
     const inspector=root.querySelector('#node-inspector');
     const provider=evidenceProvider(node),receipt=evidenceFields(node),highlights=evidenceHighlights(node);

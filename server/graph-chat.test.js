@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {answerGraph,graphPassages} from './graph-chat.js';
+import {answerGraph,graphPassages,normalizeGraphCitations} from './graph-chat.js';
 import {readGraphEvidence,graphNodeInWorkspace} from './graph.js';
 
 const workspace={id:'w1',idea:'Battery degradation and arbitrage'};
@@ -58,4 +58,21 @@ test('empty Neo4j matches return evidence-only context and close the read sessio
 test('saving evidence checks actual workspace membership independently of visualization limits',async()=>{
   const driver=mockDriver(async(query,params)=>{assert.match(query,/n.workspaceId=\$workspaceId AND elementId\(n\)=\$nodeId/);assert.deepEqual(params,{workspaceId:'w1',nodeId:'not-in-view'});assert.doesNotMatch(query,/LIMIT 500/);return {records:[record({id:'not-in-view'})]};});
   assert.equal(await graphNodeInWorkspace('w1','not-in-view',{driver}),true);assert.equal(driver.closed,true);
+});
+
+test('citations inside experiment plans, concepts, and limitations resolve to displayed graph evidence IDs',()=>{
+  const answer={summary:'Finding [G1]',concepts:[{name:'Concept',description:'Evidence [S1, S2]',chunkIds:['G1']}],directions:[{idea:'Test [S2]',chunkIds:['G2']}],limitations:['Limited evidence [S1]']};
+  const result=normalizeGraphCitations(answer,[{id:'G1'},{id:'G2'}]);
+  assert.equal(result.concepts[0].description,'Evidence [G1, G2]');assert.equal(result.directions[0].idea,'Test [G2]');assert.equal(result.limitations[0],'Limited evidence [G1]');
+  assert.throws(()=>normalizeGraphCitations({...answer,directions:[{idea:'Invented [S99]',chunkIds:['G2']}]},[{id:'G1'},{id:'G2'}]),/unknown evidence/);
+});
+
+test('model failures preserve retrieved evidence without presenting unvalidated findings',async()=>{
+  const answer=await answerGraph(workspace,{mode:'ask',question:'battery degradation'},{readEvidence:async()=>graph,configured:()=>true,generate:async()=>{throw new Error('invalid citations');}});
+  assert.equal(answer.mode,'evidence');assert.ok(answer.passages.length);assert.deepEqual(answer.answer.concepts,[]);assert.deepEqual(answer.answer.directions,[]);assert.match(answer.answer.summary,/retry/i);
+});
+test('every graph relationship alias refers to an included passage even at the context limit',()=>{
+  const nodes=Array.from({length:30},(_,i)=>node(String(i),'battery '.repeat(1500)));
+  const passages=graphPassages({nodes,seedIds:['0'],edges:nodes.slice(1).map(n=>({source:'0',target:n.id,type:'RELATED'}))},'battery','w1');
+  const ids=new Set(passages.map(p=>p.id));for(const passage of passages)for(const match of passage.text.matchAll(/\bG\d+\b/g))assert.ok(ids.has(match[0]));
 });

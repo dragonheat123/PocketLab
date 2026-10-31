@@ -1,0 +1,57 @@
+<template><style>@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(assets/fonts/dm-sans-400.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(assets/fonts/dm-sans-500.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(assets/fonts/dm-sans-600.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(assets/fonts/dm-sans-700.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(assets/fonts/manrope-400.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(assets/fonts/manrope-600.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(assets/fonts/manrope-700.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url(assets/fonts/manrope-800.ttf) format('truetype');
+}
+*{box-sizing:border-box;margin:0}#root{position:absolute;inset:0;overflow:hidden;background:var(--color-ground,#f7f8f4);color:var(--color-ink,#293128);font-family:'DM Sans',sans-serif}.stage{position:absolute;inset:0}h1,h2,h3{font-family:'Manrope';font-weight:800;letter-spacing:-3px}.sage{color:#526c40}.muted{color:#657363}.brand{position:absolute;display:flex;align-items:center;gap:24px}.mark{display:grid;place-items:center;background:#29372b;color:#e6f0ca;width:78px;height:88px;border-radius:20px 20px 20px 6px;font:700 74px 'Manrope';letter-spacing:-8px;padding-right:7px}.brand strong{font:800 37px 'Manrope';letter-spacing:-2px}.pill{border:2px solid #d5dfc8;border-radius:50px;padding:12px 25px;background:#f0f3eb;color:#526c40;font-size:30px}#l-brand{position:absolute;left:192px;top:160px;display:flex;align-items:center;gap:34px}#l-brand .mark{width:130px;height:145px;font-size:120px;padding-right:10px}#l-brand h1{font-size:100px;letter-spacing:-6px}#l-tagline{position:absolute;left:192px;top:395px;font-size:76px;line-height:1.3;width:1536px}#l-tools{position:absolute;left:192px;top:700px;width:1536px;display:grid;grid-template-columns:repeat(3,1fr);gap:50px}.l-tool{border-top:3px solid #c2d0b5;padding-top:28px}.l-tool h3{font-size:40px;letter-spacing:-1px}.l-tool p{font-size:30px;color:#657363;margin-top:14px}#l-nosana h3{color:#794b9b}#l-daytona h3{color:#216d7d}</style><div data-hf-id="hf-y086" id="root" data-composition-id="lab" data-width="1920" data-height="1080"><div data-hf-id="hf-0umg" id="lab-stage" class="stage"><div data-hf-id="hf-foqr" id="l-brand"><div data-hf-id="hf-7c2a" class="mark">p·</div><h1 data-hf-id="hf-0zyf">Pocket Lab</h1></div><h2 data-hf-id="hf-rr5y" id="l-tagline">Keep the evidence.<br data-hf-id="hf-x5px"><span data-hf-id="hf-s871" class="sage">Test the idea.</span></h2><div data-hf-id="hf-f3mt" id="l-tools"><div data-hf-id="hf-z8no" id="l-neo4j" class="l-tool"><h3 data-hf-id="hf-tjkg">Neo4j</h3><p data-hf-id="hf-j43n">Evidence database</p></div><div data-hf-id="hf-f7d6" id="l-nosana" class="l-tool"><h3 data-hf-id="hf-hgn6">Nosana</h3><p data-hf-id="hf-dvqx">AI reasoning</p></div><div data-hf-id="hf-npbe" id="l-daytona" class="l-tool"><h3 data-hf-id="hf-rf4y">Daytona</h3><p data-hf-id="hf-4x5f">Experiment sandbox</p></div></div></div></div><script>const tl=gsap.timeline({paused:true});tl.fromTo('#l-brand',{opacity:0,x:0,y:20},{opacity:1,x:0,y:0,duration:0.6,ease:'power4.out'},0.05);tl.fromTo('#l-tagline',{opacity:0,x:0,y:0},{opacity:1,x:0,y:0,duration:0.45,ease:'power4.out'},0.35);tl.fromTo('#l-neo4j',{opacity:0,x:0,y:15},{opacity:1,x:0,y:0,duration:0.45,ease:'power4.out'},0.65);tl.fromTo('#l-nosana',{opacity:0,x:0,y:15},{opacity:1,x:0,y:0,duration:0.45,ease:'power4.out'},0.85);tl.fromTo('#l-daytona',{opacity:0,x:0,y:15},{opacity:1,x:0,y:0,duration:0.45,ease:'power4.out'},1.05);window.__timelines["lab"]=tl;</script></template>

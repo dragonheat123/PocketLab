@@ -1,0 +1,57 @@
+<template><style>@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(assets/fonts/dm-sans-400.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(assets/fonts/dm-sans-500.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(assets/fonts/dm-sans-600.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(assets/fonts/dm-sans-700.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(assets/fonts/manrope-400.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(assets/fonts/manrope-600.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(assets/fonts/manrope-700.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url(assets/fonts/manrope-800.ttf) format('truetype');
+}
+*{box-sizing:border-box;margin:0}#root{position:absolute;inset:0;overflow:hidden;background:var(--color-ground,#f7f8f4);color:var(--color-ink,#293128);font-family:'DM Sans',sans-serif}.stage{position:absolute;inset:0}h1,h2,h3{font-family:'Manrope';font-weight:800;letter-spacing:-3px}.sage{color:#526c40}.muted{color:#657363}.brand{position:absolute;display:flex;align-items:center;gap:24px}.mark{display:grid;place-items:center;background:#29372b;color:#e6f0ca;width:78px;height:88px;border-radius:20px 20px 20px 6px;font:700 74px 'Manrope';letter-spacing:-8px;padding-right:7px}.brand strong{font:800 37px 'Manrope';letter-spacing:-2px}.pill{border:2px solid #d5dfc8;border-radius:50px;padding:12px 25px;background:#f0f3eb;color:#526c40;font-size:30px}#q-brand{left:192px;top:150px}#q-one,#q-two{position:absolute;left:192px;width:1536px;font-size:108px;line-height:1.22}#q-one{top:350px}#q-two{top:492px}#q-note{position:absolute;left:200px;top:735px;font-size:34px}#q-line{position:absolute;left:200px;top:860px;width:1480px;height:2px;background:#d5dfc8}#q-label{position:absolute;left:200px;top:900px;font-size:29px;font-weight:600;letter-spacing:2px;color:#526c40}</style><div data-hf-id="hf-p0wv" id="root" data-composition-id="question" data-width="1920" data-height="1080"><div data-hf-id="hf-i1il" id="question-stage" class="stage"><div data-hf-id="hf-hjva" id="q-brand" class="brand"><div data-hf-id="hf-7c2a" class="mark">p·</div><strong data-hf-id="hf-mhr3">pocket lab</strong></div><h1 data-hf-id="hf-6eyk" id="q-one">Your next experiment</h1><h1 data-hf-id="hf-4lcq" id="q-two" class="sage">starts with evidence.</h1><p data-hf-id="hf-e4qm" id="q-note" class="muted">A personal workspace for research.</p><div data-hf-id="hf-7bet" id="q-line"></div><p data-hf-id="hf-s1ei" id="q-label">QUESTION / EVIDENCE / EXPERIMENT</p></div></div><script>const tl=gsap.timeline({paused:true});tl.fromTo('#q-one',{opacity:0,x:0,y:35},{opacity:1,x:0,y:0,duration:0.65,ease:'power4.out'},0.1);tl.fromTo('#q-two',{opacity:0,x:0,y:35},{opacity:1,x:0,y:0,duration:0.65,ease:'power4.out'},0.28);tl.fromTo('#q-note',{opacity:0,x:0,y:0},{opacity:1,x:0,y:0,duration:0.5,ease:'power4.out'},0.7);tl.fromTo('#q-label',{opacity:0,x:0,y:0},{opacity:1,x:0,y:0,duration:0.5,ease:'power4.out'},0.8);tl.fromTo('#q-line',{scaleX:0,transformOrigin:'left center'},{scaleX:1,duration:.7,ease:'power2.inOut'},.55);tl.to('#question-stage',{opacity:0,y:-40,duration:.25,ease:'power3.in'},3.03);window.__timelines["question"]=tl;</script></template>

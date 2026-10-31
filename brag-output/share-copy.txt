@@ -1,0 +1,3 @@
+Pocket Lab connects a research question to its evidence, then helps you decide what to test next. Neo4j for evidence, Nosana for reasoning, Daytona for experiment execution.
+
+Music: Sascha Ende, ende.app (CC BY 4.0).
