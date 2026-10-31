@@ -23,9 +23,11 @@ export async function readExistingGraph(workspaceId=null) {
     const result=await tx.run(`MATCH (n) WHERE $workspaceId IS NULL OR n.workspaceId=$workspaceId RETURN elementId(n) AS id, n.id AS entityId, labels(n) AS labels,
       coalesce(n.name,n.title,n.id,n.text,n.query,elementId(n)) AS name,
       coalesce(n.description,n.summary,n.abstract,'') AS description,
-      coalesce(n.url,n.source,'') AS url
-      ORDER BY id LIMIT 500`,scope);
-    const nodes=result.records.map(r=>({id:r.get('id'),entityId:r.get('entityId'),labels:r.get('labels'),name:String(r.get('name')).slice(0,200),description:String(r.get('description')).slice(0,4000),url:String(r.get('url'))}));
+      coalesce(n.url,n.source,'') AS url,
+      n{.provider,.status,.model,.purpose,.requestId,.responseId,.endpoint,.startedAt,.completedAt,.createdAt,.durationMs,.promptTokens,.completionTokens,.totalTokens,.promptSha256,.outputSha256,.finishReason,.httpStatus,.inputChunkIds,.sandboxId,.sandboxState,.codeSha256,.runtime,.image,.imageDigest,.variant,.epochs,.profit_usd,.baseline_profit_usd,.delta_usd,.violations,.execution_time_sec,.exitCode,.commandIds,.python,.pytorch,.executionDevice,.error} AS evidence
+      ORDER BY CASE WHEN n:InferenceRun OR n:ExperimentRun THEN 0 ELSE 1 END,id LIMIT 500`,scope);
+    const normalize=value=>neo4j.isInt(value)?value.toNumber():Array.isArray(value)?value.map(normalize):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).map(([key,v])=>[key,normalize(v)])):value;
+    const nodes=result.records.map(r=>({id:r.get('id'),entityId:r.get('entityId'),labels:r.get('labels'),name:String(r.get('name')).slice(0,200),description:String(r.get('description')).slice(0,4000),url:String(r.get('url')),evidence:normalize(Object.fromEntries(Object.entries(r.get('evidence')||{}).filter(([,value])=>value!==null)))}));
     const relationships=await tx.run(`MATCH (a)-[r]->(b) WHERE elementId(a) IN $ids AND elementId(b) IN $ids RETURN elementId(r) AS id,elementId(a) AS source,elementId(b) AS target,type(r) AS type ORDER BY id LIMIT 1500`,{ids:nodes.map(n=>n.id)});
     const edges=relationships.records.map(r=>({id:r.get('id'),source:r.get('source'),target:r.get('target'),type:r.get('type')}));
     const totalNodes=totals.records[0].get('count').toNumber(),totalEdges=relationshipTotals.records[0].get('count').toNumber();
@@ -41,13 +43,13 @@ export function graphData(job) {
     edges.push({source:job.id,target:paper.id,type:'EXPLORES'});
   }
   for (const [index,concept] of (job.synthesis?.concepts || []).entries()) {
-    const id = `${job.id}-concept-${index}`;
+    const id = `${job.synthesisRunId||job.id}-concept-${index}`;
     nodes.push({id,label:'Concept',name:concept.name,description:concept.description,chunkIds:concept.chunkIds});
     edges.push({source:job.id,target:id,type:'CONSOLIDATES'});
     for (const paperId of new Set(concept.chunkIds.map(cid=>job.chunks.find(c=>c.id===cid)?.paperId).filter(Boolean))) edges.push({source:paperId,target:id,type:'SUPPORTS'});
   }
   for (const [index,direction] of (job.synthesis?.directions || []).entries()) {
-    const id = `${job.id}-direction-${index}`;
+    const id = `${job.synthesisRunId||job.id}-direction-${index}`;
     nodes.push({id,label:'ResearchDirection',name:direction.idea,chunkIds:direction.chunkIds});
     edges.push({source:job.id,target:id,type:'SUGGESTS'});
     for (const paperId of new Set(direction.chunkIds.map(cid=>job.chunks.find(c=>c.id===cid)?.paperId).filter(Boolean))) edges.push({source:paperId,target:id,type:'INFORMS'});
@@ -64,7 +66,7 @@ export async function persistGraph(job) {
   try {
     await session.executeWrite(async tx => {
       await tx.run(`MERGE (t:PocketLabNode:ResearchTopic {id:$id}) SET t.name=$idea, t.query=$idea, t.updatedAt=$date, t.summary=$summary, t.retrieval=$retrieval`,{id:job.id,idea:job.idea,date:new Date().toISOString(),summary:job.synthesis?.summary || '',retrieval:job.retrieval});
-      await tx.run(`MATCH (t:ResearchTopic {id:$id})-[:CONSOLIDATES|SUGGESTS]->(n) DETACH DELETE n`,{id:job.id});
+      await tx.run(`MATCH (t:ResearchTopic {id:$id})-[:CONSOLIDATES|SUGGESTS]->(n) WHERE NOT EXISTS { MATCH (:InferenceRun)-[:GENERATED]->(n) } DETACH DELETE n`,{id:job.id});
       for (const p of job.papers) {
         await tx.run(`MATCH (t:ResearchTopic {id:$topic}) MERGE (p:PocketLabNode:Paper {id:$id}) SET p.title=$title,p.url=$url,p.year=$year,p.access=$access,p.provider=$provider,p.textHash=$hash MERGE (t)-[:EXPLORES]->(p)`,{topic:job.id,id:p.id,title:p.title,url:p.url,year:p.year || 0,access:p.access,provider:job.provider,hash:createHash('sha256').update(job.chunks.filter(c=>c.paperId===p.id).map(c=>c.text).join('')).digest('hex')});
       }
@@ -83,9 +85,26 @@ export async function persistGraph(job) {
         await tx.run('MATCH (n:PocketLabNode) WHERE n.id IN $ids SET n.workspaceId=$workspaceId',{ids:[...graph.nodes.map(n=>n.id),...job.chunks.map(c=>c.id)],workspaceId:job.workspaceId});
         await tx.run('MATCH (w:ResearchTopic {id:$root}),(t:ResearchTopic {id:$topic}) MERGE (w)-[:HAS_RESEARCH]->(t)',{root:`workspace:${job.workspaceId}`,topic:job.id});
       }
+      for(const run of job.inferenceRuns||[])await writeInferenceRun(tx,job,run);
+      if(job.synthesisRunId)await tx.run(`MATCH(r:InferenceRun {id:$runId}) UNWIND $outputs AS id MATCH(n:PocketLabNode {id:id,workspaceId:$workspaceId}) MERGE(r)-[:GENERATED]->(n)`,{runId:job.synthesisRunId,outputs:graph.nodes.filter(n=>['Concept','ResearchDirection'].includes(n.label)).map(n=>n.id),workspaceId:job.workspaceId||''});
     });
     return {status:'synced',syncedAt:new Date().toISOString(),nodes:graph.nodes.length+job.chunks.length,edges:graph.edges.length+job.chunks.length+(job.synthesis?.concepts || []).reduce((n,c)=>n+c.chunkIds.length,0)+(job.synthesis?.directions || []).reduce((n,c)=>n+c.chunkIds.length,0)};
   } finally { await session.close(); }
+}
+async function writeInferenceRun(tx,job,run){
+  await tx.run(`MERGE(r:PocketLabNode:InferenceRun {id:$id}) SET r += $properties
+    WITH r OPTIONAL MATCH(t:ResearchTopic {id:$topic,workspaceId:$workspaceId})
+    FOREACH(_ IN CASE WHEN t IS NULL THEN [] ELSE [1] END | MERGE(t)-[:HAS_INFERENCE_RUN]->(r))
+    WITH r OPTIONAL MATCH(w:ResearchTopic {id:$root,workspaceId:$workspaceId})
+    FOREACH(_ IN CASE WHEN w IS NULL THEN [] ELSE [1] END | MERGE(w)-[:HAS_INFERENCE_RUN]->(r))
+    WITH r UNWIND $chunks AS cid MATCH(c:Chunk {id:cid,workspaceId:$workspaceId}) MERGE(r)-[:USED_EVIDENCE]->(c)`,{
+    id:run.id,topic:job.id,root:`workspace:${job.workspaceId}`,workspaceId:job.workspaceId||'',chunks:run.inputChunkIds||[],
+    properties:{...Object.fromEntries(Object.entries(run).filter(([key,value])=>!['graphSync','inputChunkIds'].includes(key)&&['string','number','boolean'].includes(typeof value))),inputChunkIds:run.inputChunkIds||[],workspaceId:job.workspaceId||'',name:`Nosana · ${run.purpose==='question'?'grounded answer':'research synthesis'} · ${run.status}`,description:run.status==='completed'?`Generated interpretation, not an experimental measurement. ${run.summary||''}`:'Nosana inference attempt; no validated findings were accepted.'},
+  });
+}
+export async function persistInferenceRun(job,run){
+  const session=getDriver().session({database:process.env.NEO4J_DATABASE||'neo4j'});
+  try{await session.executeWrite(tx=>writeInferenceRun(tx,job,run));}finally{await session.close();}
 }
 export async function closeGraph() { if(driver) await driver.close(); }
 
@@ -121,8 +140,9 @@ export async function persistExperimentRun(workspace,experiment,run){
     MERGE(r:PocketLabNode:ExperimentRun {id:$id})
     SET r.workspaceId=$workspaceId,r.name=$name,r.status=$status,r.sandboxId=$sandboxId,r.provider='Daytona',r.codeSha256=$hash,r.variant=$variant,r.epochs=$epochs,
       r.profit_usd=$profit,r.baseline_profit_usd=$baseline,r.delta_usd=$delta,r.violations=$violations,r.final_loss=$loss,r.execution_time_sec=$duration,r.createdAt=$createdAt,r.completedAt=$completedAt,r.error=$error,r.runtime=$runtime,r.image=$image,r.imageDigest=$imageDigest,
-      r.description=$description
+      r.description=$description,r.startedAt=$startedAt,r.sandboxState=$sandboxState,r.commandIds=$commandIds,r.exitCode=$exitCode,r.python=$python,r.pytorch=$pytorch,r.executionDevice=$executionDevice
     MERGE(e)-[:EVALUATED_BY]->(r) MERGE(h)-[:EVALUATED_BY]->(r)`,{
-      experimentId:experiment.id,hypothesisId:`${experiment.id}:hypothesis`,workspaceId:workspace.id,id:run.id,name:`${experiment.name} · ${run.status}`,status:run.status,sandboxId:run.sandboxId||'',hash:run.codeSha256,variant:run.variant,epochs:run.epochs,profit:run.metrics?.profit_usd??null,baseline:run.metrics?.baseline_profit_usd??null,delta:run.metrics?.delta_usd??null,violations:run.metrics?.violations??null,loss:run.metrics?.final_loss??null,duration:run.metrics?.execution_time_sec??null,createdAt:run.createdAt,completedAt:run.completedAt||'',error:run.error||'',runtime:run.runtime?.id||'daytona-python',image:run.runtime?.image||'Daytona default Python',imageDigest:run.runtime?.digest||'',description:`${run.sandboxId?'Actual Daytona sandbox execution.':'Daytona provisioning attempt; no sandbox execution occurred.'} ${run.recipe}. Sandbox: ${run.sandboxId||'not provisioned'}. Code SHA-256: ${run.codeSha256}. ${run.metrics?.schedule_projection||''}`,
+      experimentId:experiment.id,hypothesisId:`${experiment.id}:hypothesis`,workspaceId:workspace.id,id:run.id,name:`Daytona · ${experiment.name} · ${run.status}`,status:run.status,sandboxId:run.sandboxId||'',hash:run.codeSha256,variant:run.variant,epochs:run.epochs,profit:run.metrics?.profit_usd??null,baseline:run.metrics?.baseline_profit_usd??null,delta:run.metrics?.delta_usd??null,violations:run.metrics?.violations??null,loss:run.metrics?.final_loss??null,duration:run.metrics?.execution_time_sec??null,createdAt:run.createdAt,completedAt:run.completedAt||'',error:run.error||'',runtime:run.runtime?.id||'daytona-python',image:run.runtime?.image||'Daytona default Python',imageDigest:run.runtime?.digest||'',description:`${run.sandboxId?'Actual Daytona sandbox execution.':'Daytona provisioning attempt; no sandbox execution occurred.'} ${run.recipe}. Sandbox: ${run.sandboxId||'not provisioned'}. Code SHA-256: ${run.codeSha256}. ${run.metrics?.schedule_projection||''}`,
+      startedAt:run.startedAt||'',sandboxState:run.sandboxState||'',commandIds:(run.commands||[]).map(c=>c.commandId),exitCode:run.commands?.find(c=>c.stage==='experiment')?.exitCode??null,python:run.metrics?.runtime_info?.python||'',pytorch:run.metrics?.runtime_info?.pytorch||'',executionDevice:run.metrics?.runtime_info?.execution_device||'',
     },{database:process.env.NEO4J_DATABASE||'neo4j'});
 }

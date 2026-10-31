@@ -60,11 +60,12 @@ test('Nosana-compatible completion produces concepts with source lineage',async(
     assert.equal(url,'https://nosana.example/v1/chat/completions');assert.equal(options.headers.Authorization,'Bearer test-token');
     const body=JSON.parse(options.body);assert.equal(body.model,'deployed-model');
     const context=JSON.parse(body.messages[1].content);const cid=context.passages[0].id;
-    return json({choices:[{finish_reason:'stop',message:{content:JSON.stringify({summary:`Battery constraints [${cid}]`,concepts:[{name:'Feasible dispatch',description:'Battery optimization includes physical constraints.',chunkIds:[cid]}],directions:[{idea:'Evaluate adaptive penalties.',chunkIds:[cid]}],limitations:['Based on abstract evidence.']})}}]});
+    return new Response(JSON.stringify({id:'completion-receipt',usage:{prompt_tokens:100,completion_tokens:50,total_tokens:150},choices:[{finish_reason:'stop',message:{content:JSON.stringify({summary:`Battery constraints [${cid}]`,concepts:[{name:'Feasible dispatch',description:'Battery optimization includes physical constraints.',chunkIds:[cid]}],directions:[{idea:'Evaluate adaptive penalties.',chunkIds:[cid]}],limitations:['Based on abstract evidence.']})}}]}),{headers:{'Content-Type':'application/json','x-request-id':'provider-request-receipt'}});
   };
   const job=await createJob({idea:'battery arbitrage',provider:'openalex',limit:3});await runResearch(job);
   assert.equal(job.status,'complete');assert.equal(job.synthesisMode,'ai');assert.equal(job.retrieval,'lexical');
   const g=graphData(job);assert.equal(g.nodes.filter(n=>n.label==='Concept').length,1);assert.ok(g.edges.some(e=>e.type==='SUPPORTS'&&e.source===job.papers[0].id));assert.ok(g.edges.some(e=>e.type==='INFORMS'));
+  const receipt=job.inferenceRuns[0];assert.equal(receipt.status,'completed');assert.equal(receipt.requestId,'provider-request-receipt');assert.equal(receipt.responseId,'completion-receipt');assert.equal(receipt.totalTokens,150);assert.equal(receipt.model,'deployed-model');assert.deepEqual(receipt.inputChunkIds,job.evidence);assert.match(receipt.promptSha256,/^[a-f0-9]{64}$/);assert.match(receipt.outputSha256,/^[a-f0-9]{64}$/);assert.equal(job.synthesisRunId,receipt.id);assert.ok(g.nodes.find(n=>n.label==='Concept').id.startsWith(receipt.id));assert.ok(!JSON.stringify(receipt).includes('test-token'));
 });
 test('missing source text remains an actionable failure',async()=>{
   globalThis.fetch=async()=>json({results:[{...paper,abstract_inverted_index:null}]});
@@ -79,5 +80,14 @@ test('Google Scholar maps search snippets honestly',async()=>{
 test('truncated LLM output is rejected',async()=>{
   process.env.LLM_BASE_URL='https://nosana.example/v1';process.env.LLM_MODEL='test';
   globalThis.fetch=async()=>json({choices:[{finish_reason:'length',message:{content:'{}'}}]});
-  await assert.rejects(synthesize('question',[{id:'p1-c1',text}]),/did not finish/);
+  let receipt;
+  await assert.rejects(synthesize('question',[{id:'p1-c1',text}],{onRun:run=>receipt=run}),/did not finish/);
+  assert.equal(receipt.status,'failed');assert.equal(receipt.finishReason,'length');assert.equal(receipt.outputJson,undefined);assert.ok(receipt.completedAt);assert.equal(receipt.httpStatus,200);
+});
+test('HTTP failures retain a failed receipt without fabricating response IDs or usage',async()=>{
+  process.env.LLM_BASE_URL='https://nosana.example/v1';process.env.LLM_MODEL='test';
+  globalThis.fetch=async()=>new Response('{}',{status:503});
+  let receipt;
+  await assert.rejects(synthesize('question',[{id:'p1-c1',text}],{onRun:run=>receipt=run}),/HTTP 503/);
+  assert.equal(receipt.status,'failed');assert.equal(receipt.httpStatus,503);assert.equal(receipt.responseId,undefined);assert.equal(receipt.totalTokens,undefined);assert.equal(receipt.outputJson,undefined);
 });

@@ -1,12 +1,12 @@
 # Pocket Lab
 
-A workspace for each research idea: question → source library → hypotheses and experiments → one shared Neo4j knowledge graph. Includes scholarly discovery, document ingestion, retrieval, and Nosana synthesis. The Battery arbitrage workspace is precreated from the existing battery graph.
+A workspace for each research idea. Discover papers, retrieve source passages, use Nosana to synthesize cited ideas, design a hypothesis, and run the built-in battery benchmark in Daytona. Source evidence, inference receipts, and execution results join one Neo4j graph per workspace. Battery arbitrage is precreated from the existing battery graph.
 
 ## Project presentation
 
 [Download the editable slides](docs/slides/pocket-lab.pptx) · [Project concept](CONCEPT.md) · [Architecture](archi.md)
 
-The nine slides below introduce the project and its current prototype. Planned capabilities are labeled explicitly.
+The nine slides below introduce the project and its prototype vision. Some slides predate the execution integration; the working flow and implementation details below describe the current app.
 
 ![Slide 1 — Pocket Lab: a personal research workspace](docs/slides/slide-01.png)
 
@@ -26,19 +26,24 @@ The nine slides below introduce the project and its current prototype. Planned c
 
 ![Slide 9 — Planned evidence-to-experiment loop](docs/slides/slide-09.png)
 
-## Evidence database and research sandboxes
+## The working flow
 
-The planned research loop gives each service a distinct role:
+1. **Create or open a workspace.** Its research question, literature, hypotheses, experiments, and run evidence share one workspace-scoped Neo4j graph.
+2. **Discover and read literature.** Search Google Scholar through SerpApi, or choose OpenAlex. Fetch accessible PDF/article text; label abstract and search-snippet fallbacks. Split readable text into bounded passages and persist `Paper` / `Chunk` evidence.
+3. **Retrieve and synthesize with Nosana.** BM25 retrieves relevant passages; optional embeddings enable semantic retrieval. The backend calls the configured Nosana chat endpoint and validates the returned JSON and citation IDs. Each new call records an `InferenceRun`: actual response/request IDs when supplied, model, timestamps, token counts when returned, prompt/output hashes, and the passage IDs it used. Validated synthesis produces concepts and proposed directions; it is generated interpretation, not an experimental measurement.
+4. **Design an experiment.** Review a proposed direction, choose a testable hypothesis, and optionally attach a supporting graph node. This is an explicit user step; the app does not automatically turn arbitrary model output into executable code.
+5. **Execute the battery benchmark in Daytona.** Select a reviewed recipe, epoch count, and runtime image. The backend provisions a real sandbox, uploads versioned Python, captures actual command IDs and logs, checks the exit code, and validates returned metrics against the run ID and code hash. Other domains need an executable recipe before they can run.
+6. **Inspect the evidence in Neo4j.** `InferenceRun` nodes connect Nosana calls to their input passages and generated outputs. `ExperimentRun` nodes connect Daytona outcomes to the experiment and hypothesis. Completed, failed, cancelled, and interrupted attempts retain their actual status. Sandbox cleanup does not remove retained run evidence.
 
-| Service | How Pocket Lab will use it | Current status |
+The UI coordinates these stages through user actions. It does not yet run an autonomous, end-to-end research-to-code loop.
+
+| Service | Current role | Evidence you can inspect |
 | --- | --- | --- |
-| **Neo4j: evidence database** | Keep papers, source passages, claims, hypotheses, and experiments connected by provenance. Extend the graph with execution runs, measured results, and artifact references so every conclusion can be traced to literature or a recorded test. | Evidence, hypotheses, experiments, and actual sandbox run records are persisted with provenance. |
-| **Nosana: model / GPU sandbox** | Use configurable model deployments to synthesize evidence and propose hypotheses. Record the model, prompt configuration, input evidence IDs, and output for each future model trial so different reasoning approaches can be compared. | Configurable chat inference exists. Per-trial deployment orchestration and model-run provenance are planned. |
-| **Daytona: code-execution sandbox** | Create a dedicated environment for an experiment, load its code and selected inputs, run simulations or tests, and collect exit status, logs, metrics, and output artifacts. | Implemented for the built-in battery benchmark: actual Daytona sandbox IDs, command IDs, live logs, validated metrics, and cleanup are recorded. |
+| **Nosana** | LLM inference for cited synthesis and grounded answers through an OpenAI-compatible endpoint | Purple **N** run nodes; model, provider IDs when returned, token usage, timestamps, input passages, prompt/output hashes, and validation status |
+| **Daytona** | Actual sandbox execution of the built-in battery benchmark | Teal **D** run nodes; sandbox and command IDs, exit code, code hash, runtime image/device, measured metrics, and cleanup state |
+| **Neo4j** | Persistent evidence and provenance graph, scoped to each workspace | Sources → passages → Nosana-generated ideas; hypotheses → experiments → Daytona results |
 
-Here, “Nosana sandbox” describes the model and GPU experimentation role. Nosana runs container-defined GPU jobs and deployments, while Daytona provides the programmatic code sandbox. The app will coordinate these as separate execution layers. See [Nosana jobs](https://learn.nosana.com/deployments/jobs/) and [Daytona code execution](https://www.daytona.io/docs/process-code-execution).
-
-A future run will retrieve a scoped evidence bundle, ask Nosana for a cited proposal, execute the test in Daytona, and write validated results back through the backend into Neo4j. Generated proposals remain separate from measured outcomes. Local files continue to support unsynchronized work.
+**Runtime image versus execution provider:** `docker.io/nosana/pytorch-jupyter:2.0.0` is a Nosana-published container that currently runs **inside Daytona on CPU**. Choosing it does not submit a Nosana GPU job. Nosana LLM inference is a separate API call. Direct Nosana GPU experiment submission and deployment orchestration are not implemented. See [Nosana inference](https://learn.nosana.com/llm/), [Nosana jobs](https://learn.nosana.com/deployments/jobs/), and [Daytona code execution](https://www.daytona.io/docs/process-code-execution).
 
 ## Run
 
@@ -58,8 +63,8 @@ Open **All workspaces** to create a research workspace or continue Battery arbit
 
 - **Overview:** the research question, real source/experiment/node counts, latest cited findings, and suggested next steps.
 - **Literature:** every existing paper/document in the workspace graph, searchable by title; expand the research agent to discover more evidence and review a source collection.
-- **Experiments:** design a testable hypothesis, optionally attach a supporting graph node, and save it as a planned experiment. No run metrics are fabricated.
-- **Knowledge graph:** all sources, findings, hypotheses, and experiments for that workspace, with node inspection and relationship navigation. Experiments are branches of this graph, not separate graphs.
+- **Experiments:** design a testable hypothesis, optionally attach a supporting graph node, then run a supported battery recipe in Daytona. Follow real logs and compare measured benchmark metrics with its baseline.
+- **Knowledge graph:** all sources, findings, hypotheses, experiments, and provider run evidence in that workspace. The **Proof of work** cards filter Nosana or Daytona runs and their neighbors; recent-run chips open the evidence inspector. Purple **N** rings identify Nosana inference, teal **D** rings identify Daytona execution. Inspect IDs, timestamps, hashes, status, and available usage/metrics. Experiments remain branches of the same graph.
 
 New records carry a `workspaceId`. Graph reads and supporting-evidence selections are scoped to it. The initial migration associates unscoped existing battery data with Battery arbitrage without removing existing nodes or relationships. Workspace/experiment metadata persists in `data/workspaces/`; evidence sessions remain in `data/`. Neo4j writes are retried on server startup for locally saved workspaces and experiments. The battery runner supports real Daytona execution when DAYTONA_API_KEY is configured.
 
@@ -78,14 +83,14 @@ All credentials are loaded by the server from `.env`. Restart the server after c
 
 Nosana requests use `POST {LLM_BASE_URL}/chat/completions`. The backend checks `/models` and automatically selects a single served chat model when `LLM_MODEL` is blank. Set `LLM_MODEL` explicitly when multiple models are available. Initializing endpoints (HTTP 503) are shown as starting; the research workspace rechecks readiness every 15 seconds. The model must return the requested JSON structure; the server validates the structure and source passage IDs before accepting concepts or directions. No OpenAI account or API key is needed. A separate embedding model is optional; point `EMBEDDING_BASE_URL` to a deployment that supports `/embeddings` if desired.
 
-After connecting Nosana, open the workspace’s Literature section, expand its research notebook, and choose **Generate with Nosana**. Successful consolidation is written back into the workspace graph automatically. No need to repeat paper discovery.
+After connecting Nosana, open the workspace’s Literature section, expand its research notebook, and choose **Generate with Nosana**. Successful consolidation and its inference receipt are written back into the workspace graph automatically. Grounded-answer calls also retain receipts. No need to repeat paper discovery. Older synthesis made before receipt capture has no invented request ID or run timestamp; generate a new synthesis to produce a complete receipt.
 
 ## API endpoints
 
 | Endpoint | Purpose |
 | --- | --- |
-| `GET /api/health` | Search/LLM configuration status and live Neo4j connectivity |
-| `GET /api/workspaces` | List workspaces with graph counts and planned experiments |
+| `GET /api/health` | Search configuration and live Nosana, Neo4j, and Daytona connectivity |
+| `GET /api/workspaces` | List workspaces with graph counts, experiments, and execution summaries |
 | `POST /api/workspaces` | Create a workspace with `{ "name": "…", "idea": "…", "domain": "…" }` |
 | `GET /api/workspaces/:id` | Workspace details and statistics |
 | `POST /api/workspaces/:id/experiments` | Add a planned experiment with `{ "name": "…", "hypothesis": "…", "sourceNodeId": "optional Neo4j element ID" }` |
@@ -115,7 +120,13 @@ Execution API routes use the prefix `/api/workspaces/:workspaceId/experiments/:e
 - `GET /:runId/code` returns the uploaded Python for inspection.
 - `POST /:runId/cancel` requests cancellation and cleanup.
 
-Successful and failed attempts are recorded as `(Experiment)-[:EVALUATED_BY]->(ExperimentRun)` and `(Hypothesis)-[:EVALUATED_BY]->(ExperimentRun)` in the same workspace graph.
+Terminal attempts are recorded as `(Experiment)-[:EVALUATED_BY]->(ExperimentRun)` and `(Hypothesis)-[:EVALUATED_BY]->(ExperimentRun)` in the same workspace graph.
+
+## Showing provider evidence during a demo
+
+- **In Pocket Lab:** open **Battery arbitrage → Knowledge graph**. Select the Nosana or Daytona **Proof of work** card, then select a run chip or an N/D node. Follow `USED_EVIDENCE`, `GENERATED`, and `EVALUATED_BY` connections. The inspector distinguishes generated interpretation, completed measurement, failed execution, and provisioning-only attempts.
+- **In Daytona:** start a run from **Experiments** and open the [Daytona dashboard](https://app.daytona.io) while it runs. Match the sandbox ID displayed in Pocket Lab. The worker deletes the sandbox after collection; Pocket Lab retains its logs and provenance.
+- **For Nosana inference:** [Nosana's usage endpoint](https://learn.nosana.com/llm/#usage-and-cost), `GET https://api.nosana.com/credits/llm/usage?limit=20`, returns provider-recorded inference history with request IDs, model, tokens, timestamp, and cost. Authenticate server-side with the Nosana API key. This is inference usage, not a separately submitted GPU experiment. Pocket Lab records receipts from each new response; it does not currently import account-wide billing history.
 
 ## Evidence and graph model
 
@@ -136,9 +147,14 @@ Neo4j stores:
 (ResearchTopic {kind: "workspace"})-[:HAS_RESEARCH]->(ResearchTopic)
 (ResearchTopic {kind: "workspace"})-[:HAS_EXPERIMENT]->(Experiment)-[:TESTS]->(Hypothesis)
 (Hypothesis)-[:GROUNDED_IN]->(source node in the same workspace)
+(ResearchTopic)-[:HAS_INFERENCE_RUN]->(InferenceRun {provider: "Nosana"})
+(InferenceRun)-[:USED_EVIDENCE]->(Chunk)
+(InferenceRun)-[:GENERATED]->(Concept or ResearchDirection)
+(Experiment)-[:EVALUATED_BY]->(ExperimentRun {provider: "Daytona"})
+(Hypothesis)-[:EVALUATED_BY]->(ExperimentRun)
 ```
 
-Writes use parameterized Cypher, a unique ID constraint, and a transaction. Re-syncing replaces that session’s concepts and directions atomically and retains paper/chunk identities. Paper metadata, evidence, vectors (when configured), synthesis, and session state also persist locally under ignored `data/`. The frontend never receives credentials or embedding vectors. Research session graph previews show the graph payload written by sync. The workspace **Knowledge graph** view reads only that workspace’s graph directly from Neo4j, including the imported battery data. It supports searching, filtering, zooming, panning, and inspecting relationships. Viewing the graph never changes database contents.
+Writes use parameterized Cypher, a unique ID constraint, and a transaction. Re-syncing retains paper/chunk identities and run IDs. New synthesis outputs use the inference run ID; outputs already linked to a recorded run are retained so later synthesis does not overwrite their provenance. Grounded-answer receipts retain the validated output snapshot on the run; consolidation additionally links its concept/direction nodes through `GENERATED`. Paper metadata, evidence, vectors (when configured), synthesis, and session state also persist locally under ignored `data/`. The frontend never receives credentials or embedding vectors. Research session graph previews show the graph payload written by sync. The workspace **Knowledge graph** view reads only that workspace’s graph directly from Neo4j, including the imported battery data. It supports searching, filtering, zooming, panning, and inspecting relationships. Viewing the graph never changes database contents.
 
 ## Provider documentation
 

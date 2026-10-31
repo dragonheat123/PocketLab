@@ -2,9 +2,9 @@ import 'dotenv/config';
 import express from 'express';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
-import { jobs,loadJobs,createJob,runResearch,publicJob,save } from './research.js';
+import { jobs,loadJobs,createJob,runResearch,publicJob,save,synthesizeForJob } from './research.js';
 import { graphHealth,persistGraph,closeGraph,readExistingGraph,neo4jConfigured } from './graph.js';
-import { retrieve,synthesize,evidenceOnly,llmConfigured } from './retrieval.js';
+import { retrieve,evidenceOnly,llmConfigured } from './retrieval.js';
 import { llmHealth } from './llm.js';
 import {workspaces,BATTERY_ID,initializeWorkspaces,createWorkspace,createExperiment,listWorkspaces,syncWorkspace} from './workspaces.js';
 import {daytonaHealth,createRun,executeRun,publicRun,terminalRun,recoverInterruptedRuns} from './daytona.js';
@@ -98,7 +98,7 @@ app.post('/api/research/:id/consolidate',async(req,res)=>{
   try {
     const passages=await retrieve(req.job,req.job.idea,8);
     if(!passages.length)return res.status(422).json({error:'No relevant evidence was retrieved. Start a more specific search.'});
-    const synthesis=await synthesize(req.job.idea,passages);
+    const synthesis=await synthesizeForJob(req.job,req.job.idea,passages);
     req.job.synthesis=synthesis;req.job.synthesisMode='ai';req.job.evidence=passages.map(c=>c.id);
     req.job.graphSync={status:'pending',error:'New synthesis is saved locally. Sync to Neo4j to commit the updated graph.'};
     if(neo4jConfigured()){
@@ -116,7 +116,7 @@ app.post('/api/research/:id/ask',async(req,res)=>{
   try {
     const passages=await retrieve(req.job,question.data,8);
     if(!passages.length)return res.json({mode:'evidence',answer:{...evidenceOnly([]),summary:'No relevant passages found. Try a question closer to the indexed research topic.'},passages:[]});
-    const answer=llmConfigured()?await synthesize(question.data,passages):evidenceOnly(passages);
+    const answer=llmConfigured()?await synthesizeForJob(req.job,question.data,passages,'question'):evidenceOnly(passages);
     res.json({mode:llmConfigured()?'ai':'evidence',answer,passages:passages.map(({embedding,...c})=>c)});
   } catch{res.status(502).json({error:'Could not answer from the indexed evidence. Check AI provider configuration and retry.'});}
 });

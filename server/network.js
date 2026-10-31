@@ -44,8 +44,9 @@ export async function downloadDocument(input, redirects = 0) {
   });
 }
 
-export async function jsonRequest(url, options = {}) {
+export async function jsonRequest(url, options = {}, onResponse) {
   const response = await fetch(url, { ...options, signal: options.signal || AbortSignal.timeout(60000) });
+  onResponse?.(response);
   if (!response.ok) throw new Error(`${new URL(url).hostname} returned HTTP ${response.status}`);
   const data = await response.json();
   if (data.error) throw new Error(typeof data.error === 'string' ? data.error : 'Provider rejected request');

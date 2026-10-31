@@ -5,7 +5,7 @@ import { PDFParse } from 'pdf-parse';
 import * as cheerio from 'cheerio';
 import { downloadDocument, jsonRequest } from './network.js';
 import { chunkText, embed, retrieve, synthesize, evidenceOnly, llmConfigured } from './retrieval.js';
-import { neo4jConfigured, persistGraph, graphData } from './graph.js';
+import { neo4jConfigured, persistGraph, persistInferenceRun, graphData } from './graph.js';
 
 const dataDir = path.resolve(process.env.POCKETLAB_DATA_DIR || 'data');
 export const jobs = new Map();
@@ -20,6 +20,19 @@ export async function save(job) {
   const target=path.join(dataDir,`${job.id}.json`);
   const temp=`${target}.${randomUUID()}.tmp`;
   await fs.writeFile(temp,JSON.stringify(job)); await fs.rename(temp,target);
+}
+/** Retain provider receipts even when the response fails validation. */
+export async function synthesizeForJob(job,question,passages,purpose='consolidation') {
+  return synthesize(question,passages,{purpose,onRun:async run=>{
+    (job.inferenceRuns ||= []).push(run);
+    if(run.status==='completed'&&purpose==='consolidation')job.synthesisRunId=run.id;
+    await save(job);
+    if(neo4jConfigured()){
+      try{await persistInferenceRun(job,run);run.graphSync={status:'synced'};}
+      catch{run.graphSync={status:'pending'};}
+      await save(job);
+    }
+  }});
 }
 async function event(job,stage,message) {job.stage=stage;job.events.push({stage,message,at:new Date().toISOString()});await save(job);}
 export function publicJob(job) {
@@ -92,7 +105,7 @@ export async function runResearch(job) {
     job.evidence=passages.map(c=>c.id);
     await event(job,'synthesize',llmConfigured()?'Consolidating retrieved evidence into cited concepts and research directions…':'Evidence indexed. AI consolidation awaits your Nosana endpoint.');
     if(llmConfigured()) {
-      try {job.synthesis=await synthesize(job.idea,passages);job.synthesisMode='ai';}
+      try {job.synthesis=await synthesizeForJob(job,job.idea,passages);job.synthesisMode='ai';}
       catch {job.synthesis=evidenceOnly(passages);job.synthesis.limitations.unshift('AI synthesis failed. Check API access, model configuration, and quota.');job.synthesisMode='evidence';await event(job,'synthesize','AI synthesis unavailable. Retained source evidence for inspection.');}
     } else {job.synthesis=evidenceOnly(passages);job.synthesisMode='evidence';}
     await event(job,'graph','Preparing the evidence graph and preserving source lineage…');
