@@ -6,6 +6,7 @@ import * as cheerio from 'cheerio';
 import { downloadDocument, jsonRequest } from './network.js';
 import { chunkText, embed, retrieve, synthesize, evidenceOnly, llmConfigured } from './retrieval.js';
 import { neo4jConfigured, persistGraph, persistInferenceRun, graphData } from './graph.js';
+import {readJson,writeJson} from './storage.js';
 
 const dataDir = path.resolve(process.env.POCKETLAB_DATA_DIR || 'data');
 export const jobs = new Map();
@@ -13,13 +14,11 @@ export async function loadJobs() {
   await fs.mkdir(dataDir,{recursive:true});
   for (const name of await fs.readdir(dataDir)) {
     if (!name.endsWith('.json')) continue;
-    try { const job=JSON.parse(await fs.readFile(path.join(dataDir,name),'utf8')); if(job.status==='running'||job.status==='queued'){job.status='failed';job.error='Research was interrupted by a server restart. Start a new search.';} jobs.set(job.id,job); } catch { /* Ignore incomplete cache files. */ }
+    try { const job=await readJson(path.join(dataDir,name)); if(job.status==='running'||job.status==='queued'){job.status='failed';job.error='Research was interrupted by a server restart. Start a new search.';} jobs.set(job.id,job); } catch { /* Ignore incomplete cache files. */ }
   }
 }
 export async function save(job) {
-  const target=path.join(dataDir,`${job.id}.json`);
-  const temp=`${target}.${randomUUID()}.tmp`;
-  await fs.writeFile(temp,JSON.stringify(job)); await fs.rename(temp,target);
+  await writeJson(path.join(dataDir,`${job.id}.json`),job);
 }
 /** Retain provider receipts even when the response fails validation. */
 export async function synthesizeForJob(job,question,passages,purpose='consolidation') {

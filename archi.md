@@ -26,6 +26,9 @@ flowchart TB
     Retrieval -. Optional .-> Embed[Embedding endpoint]
     Retrieval -. Configured inference .-> Nosana[Nosana chat endpoint]
     Graph --> Neo4j[(Neo4j evidence database)]
+    API --> QA[Graph questions and experiment proposals]
+    Neo4j -->|Keyword-selected records and two-hop relationships| QA
+    QA -->|Cited synthesis| Nosana
 ```
 
 Daytona execution is a proposed extension. The current system saves experiments with `planned` status and does not run them.
@@ -50,7 +53,7 @@ flowchart LR
 
 The stored evidence chain is `(ResearchTopic)-[:EXPLORES]->(Paper)-[:HAS_CHUNK]->(Chunk)`. Neo4j stores the extracted passage text and source metadata. The downloader does not currently archive raw PDF/HTML files or store an additional complete document body in the database. The extraction limits still apply.
 
-**Current persistence timing:** discovery builds passages in the session, retrieves evidence, optionally synthesizes findings, then writes the evidence graph when Neo4j is configured. A failed or unconfigured sync leaves local session data available for an explicit retry. Retrieval currently ranks session passages in memory; it does not yet query Neo4j for its evidence. The planned database-backed execution loop will read its evidence bundles from Neo4j.
+**Current persistence timing:** discovery builds passages in the session, retrieves evidence, optionally synthesizes findings, then writes the evidence graph when Neo4j is configured. A failed or unconfigured sync leaves local session data available for an explicit retry. Literature retrieval ranks session passages in memory. The graph-page question endpoint independently reads persisted Neo4j evidence through `readGraphEvidence`, selecting up to eight keyword-matching seeds and a bounded neighborhood of up to two hops. It does not depend on the 500-node visualization window. The planned execution loop will also read its evidence bundles from Neo4j.
 
 ## Planned evidence and sandbox execution loop
 
@@ -108,6 +111,14 @@ Every new record should carry `workspaceId` and stable IDs. A model trial should
 
 The orchestration service, sandbox adapters, artifact store, run APIs, and these graph extensions remain to be implemented. The existing JSON session data and Neo4j synchronization continue to describe current persistence behavior.
 
+## Graph questions and AI experiment proposals
+
+`POST /api/graph/ask` accepts a workspace ID, an `ask` or `propose` mode, and a question (optional for proposals). Fixed, parameterized read queries select matching graph records and relationships. Every traversed node must belong to the requested workspace. Retrieval includes passage text and selected run status/metrics, while excluding embedding vectors and arbitrary node properties.
+
+The backend assembles at most 20 cited records within a 28,000-character evidence budget and sends them to the configured Nosana model. The existing structured-output validator checks citations against the supplied record IDs. The prompt distinguishes source passages, generated interpretations, failed attempts, and completed measured runs. Without model configuration or matching evidence, the panel shows evidence or a missing-evidence message instead of inventing an answer.
+
+The **AI: propose experiments** action uses the workspace research question to retrieve evidence and requests hypotheses, baselines, variables, metrics, and procedures. Proposals remain in the browser until reviewed and saved using the existing experiment endpoint. A saved proposal links to a cited supporting node. This path does not create a sandbox or execute code. Questions are independent requests, with recent responses retained in browser memory for the current app session.
+
 ## Code map
 
 | File | Responsibility |
@@ -118,6 +129,7 @@ The orchestration service, sandbox adapters, artifact store, run APIs, and these
 | `server/index.js` | HTTP routes, input validation, operation guards, startup, and frontend serving. |
 | `server/workspaces.js` | Workspace and experiment metadata, local persistence, migration, and graph sync retries. |
 | `server/research.js` | Discovery jobs, source deduplication, document extraction, evidence indexing, and session persistence. |
+| `server/graph-chat.js`, `src/graph-chat-ui.js` | Workspace graph evidence selection, cited questions, AI experiment proposals, and review/save UI. |
 | `server/retrieval.js` | Passage splitting, BM25 ranking, optional embeddings, synthesis, and citation validation. |
 | `server/llm.js` | Model readiness, model selection, and inference headers. |
 | `server/graph.js` | Neo4j health, reads, transactional research writes, workspace registration, and experiment links. |

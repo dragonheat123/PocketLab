@@ -6,6 +6,7 @@ export const inferenceHeaders=()=>({'Content-Type':'application/json',...(proces
 /** Discover the deployed model without assuming its name or reporting warmup as ready. */
 export async function llmHealth({force=false}={}) {
   if(!llmConfigured())return {configured:false,connected:false,status:'not_configured',message:'Nosana endpoint is not configured.'};
+  if(process.env.APP_NETWORK_RESTRICTED==='true')return {configured:true,connected:false,status:'unavailable',message:'Daytona organization networking blocks Nosana inference. Enable outbound access and redeploy to use live synthesis.'};
   const key=configKey();
   if(!force&&cached?.key===key&&Date.now()-cached.at<10000)return cached.value;
   if(inflight?.key===key)return inflight.promise;

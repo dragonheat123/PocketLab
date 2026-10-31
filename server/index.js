@@ -3,30 +3,36 @@ import express from 'express';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { jobs,loadJobs,createJob,runResearch,publicJob,save,synthesizeForJob } from './research.js';
-import { graphHealth,persistGraph,closeGraph,readExistingGraph,neo4jConfigured } from './graph.js';
+import { graphHealth,persistGraph,closeGraph,readExistingGraph,graphNodeInWorkspace,neo4jConfigured } from './graph.js';
 import { retrieve,evidenceOnly,llmConfigured } from './retrieval.js';
 import { llmHealth } from './llm.js';
 import {workspaces,BATTERY_ID,initializeWorkspaces,createWorkspace,createExperiment,listWorkspaces,syncWorkspace} from './workspaces.js';
 import {daytonaHealth,createRun,executeRun,publicRun,terminalRun,recoverInterruptedRuns} from './daytona.js';
+import {answerGraph} from './graph-chat.js';
+import {hostingAccess} from './hosting.js';
+import {readGraphSnapshot} from './graph-snapshots.js';
 
 const app=express();
 const operations=new Set();
 app.disable('x-powered-by');app.use(express.json({limit:'16kb'}));
-// This is a local, single-user lab. Reject cross-origin mutations.
-app.use('/api',(req,res,next)=>{
-  const origin=req.headers.origin;
-  if(origin && !['http://localhost:'+ (process.env.PORT || 5173),'http://127.0.0.1:'+(process.env.PORT || 5173)].includes(origin))return res.status(403).json({error:'Cross-origin request rejected'});
-  next();
-});
-app.get('/api/health',async(_req,res)=>{
+const hosting=hostingAccess();hosting.install(app);
+app.get('/api/health',async(req,res)=>{
   const [neo4j,llm,daytona]=await Promise.all([graphHealth(),llmHealth(),daytonaHealth()]);
-  res.json({scholar:Boolean(process.env.SERPAPI_API_KEY),openalex:true,ai:llm.connected,llm,neo4j,daytona});
+  res.json({scholar:Boolean(process.env.SERPAPI_API_KEY),openalex:true,ai:llm.connected,llm,neo4j,daytona,access:{protected:Boolean(process.env.DEMO_ACCESS_CODE),unlocked:hosting.access(req)}});
 });
 app.get('/api/graph',async(req,res)=>{
   const workspaceId=req.query.workspaceId || BATTERY_ID;
   if(!workspaces.has(workspaceId))return res.status(404).json({error:'Workspace not found'});
-  try{res.json(await readExistingGraph(workspaceId));}
+  try{res.json(await (process.env.APP_NETWORK_RESTRICTED==='true'?readGraphSnapshot(workspaceId):readExistingGraph(workspaceId)));}
   catch{res.status(503).json({error:'Could not read the existing Neo4j graph. Check connection and database access.'});}
+});
+app.post('/api/graph/ask',async(req,res)=>{
+  const input=z.object({workspaceId:z.string().min(1).max(200),question:z.string().trim().min(5).max(1000).optional(),mode:z.enum(['ask','propose']).default('ask')}).safeParse(req.body);
+  if(!input.success||input.data.mode==='ask'&&!input.data.question)return res.status(400).json({error:'Choose a workspace and enter a question of 5–1000 characters.'});
+  const workspace=workspaces.get(input.data.workspaceId);
+  if(!workspace)return res.status(404).json({error:'Workspace not found'});
+  try{res.json(await answerGraph(workspace,input.data));}
+  catch{res.status(503).json({error:'Could not answer from the graph. Check the Neo4j and Nosana connections, then retry.'});}
 });
 app.get('/api/workspaces',async(_req,res)=>res.json(await listWorkspaces(jobs)));
 app.post('/api/workspaces',async(req,res)=>{
@@ -45,7 +51,7 @@ app.post('/api/workspaces/:workspaceId/sync',async(req,res)=>{
 app.post('/api/workspaces/:workspaceId/experiments',async(req,res)=>{
   const input=z.object({name:z.string().trim().min(3).max(120),hypothesis:z.string().trim().min(12).max(2000),sourceNodeId:z.string().max(300).optional()}).safeParse(req.body);
   if(!input.success)return res.status(400).json({error:'Add an experiment name (3–120 characters) and a testable hypothesis (12–2000 characters).'});
-  if(input.data.sourceNodeId){const graph=await readExistingGraph(req.workspace.id);if(!graph.nodes.some(n=>n.id===input.data.sourceNodeId))return res.status(400).json({error:'Choose an evidence node from this workspace.'});}
+  if(input.data.sourceNodeId&&!await graphNodeInWorkspace(req.workspace.id,input.data.sourceNodeId))return res.status(400).json({error:'Choose an evidence node from this workspace.'});
   res.status(201).json(await createExperiment(req.workspace,input.data));
 });
 app.use('/api/workspaces/:workspaceId/experiments/:experimentId',(req,res,next)=>{
@@ -132,6 +138,7 @@ if(process.env.NODE_ENV==='production') {
   const vite=await createServer({server:{middlewareMode:true},appType:'spa'});app.use(vite.middlewares);
 }
 app.use((error,_req,res,_next)=>res.status(error.status || 500).json({error:error.status===400?'Invalid JSON request.':'The request could not be completed.'}));
-const server=app.listen(Number(process.env.PORT || 5173),'127.0.0.1',()=>console.log(`Pocket Lab → http://localhost:${process.env.PORT || 5173}`));
+const host=process.env.HOST||'127.0.0.1';
+const server=app.listen(Number(process.env.PORT || 5173),host,()=>console.log(`Pocket Lab → http://${host}:${process.env.PORT || 5173}`));
 server.on('error',error=>{console.error(error.code==='EADDRINUSE'?'Port is in use. Stop the previous dev server or change PORT.':error.message);process.exit(1);});
 process.on('SIGTERM',()=>{server.close();void closeGraph().finally(()=>process.exit(0));});

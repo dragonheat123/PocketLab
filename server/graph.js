@@ -4,11 +4,13 @@ let driver;
 export const neo4jConfigured = () => Boolean(process.env.NEO4J_URI && process.env.NEO4J_USERNAME && process.env.NEO4J_PASSWORD);
 function getDriver() {
   if (!neo4jConfigured()) throw new Error('Configure NEO4J_URI, NEO4J_USERNAME and NEO4J_PASSWORD in .env');
+  if(process.env.APP_NETWORK_RESTRICTED==='true')throw new Error('Daytona organization network access to Neo4j is restricted.');
   driver ||= neo4j.driver(process.env.NEO4J_URI, neo4j.auth.basic(process.env.NEO4J_USERNAME,process.env.NEO4J_PASSWORD),{ connectionTimeout:8000,connectionAcquisitionTimeout:10000,maxTransactionRetryTime:5000 });
   return driver;
 }
 export async function graphHealth() {
   if (!neo4jConfigured()) return { configured:false, connected:false };
+  if(process.env.APP_NETWORK_RESTRICTED==='true')return {configured:true,connected:false,status:'restricted_network',snapshotAvailable:true,error:'Daytona organization networking blocks Neo4j. Showing a saved graph snapshot.'};
   try { await getDriver().verifyConnectivity(); return {configured:true,connected:true}; }
   catch { return {configured:true,connected:false,error:'Neo4j is unreachable. Check the server URL, credentials, and database.'}; }
 }
@@ -145,4 +147,43 @@ export async function persistExperimentRun(workspace,experiment,run){
       experimentId:experiment.id,hypothesisId:`${experiment.id}:hypothesis`,workspaceId:workspace.id,id:run.id,name:`Daytona · ${experiment.name} · ${run.status}`,status:run.status,sandboxId:run.sandboxId||'',hash:run.codeSha256,variant:run.variant,epochs:run.epochs,profit:run.metrics?.profit_usd??null,baseline:run.metrics?.baseline_profit_usd??null,delta:run.metrics?.delta_usd??null,violations:run.metrics?.violations??null,loss:run.metrics?.final_loss??null,duration:run.metrics?.execution_time_sec??null,createdAt:run.createdAt,completedAt:run.completedAt||'',error:run.error||'',runtime:run.runtime?.id||'daytona-python',image:run.runtime?.image||'Daytona default Python',imageDigest:run.runtime?.digest||'',description:`${run.sandboxId?'Actual Daytona sandbox execution.':'Daytona provisioning attempt; no sandbox execution occurred.'} ${run.recipe}. Sandbox: ${run.sandboxId||'not provisioned'}. Code SHA-256: ${run.codeSha256}. ${run.metrics?.schedule_projection||''}`,
       startedAt:run.startedAt||'',sandboxState:run.sandboxState||'',commandIds:(run.commands||[]).map(c=>c.commandId),exitCode:run.commands?.find(c=>c.stage==='experiment')?.exitCode??null,python:run.metrics?.runtime_info?.python||'',pytorch:run.metrics?.runtime_info?.pytorch||'',executionDevice:run.metrics?.runtime_info?.execution_device||'',
     },{database:process.env.NEO4J_DATABASE||'neo4j'});
+}
+
+/** Query persisted evidence independently of the 500-node visualization window. */
+export async function readGraphEvidence(workspaceId,terms,{driver:graphDriver=getDriver()}={}) {
+  const session=graphDriver.session({database:process.env.NEO4J_DATABASE||'neo4j',defaultAccessMode:neo4j.session.READ});
+  try{return await session.executeRead(async tx=>{
+    const seeds=await tx.run(`MATCH (n) WHERE n.workspaceId=$workspaceId
+      WITH n,toLower(coalesce(n.name,'')+' '+coalesce(n.title,'')+' '+coalesce(n.text,'')+' '+coalesce(n.description,'')+' '+coalesce(n.summary,'')) AS content
+      WITH n,size([term IN $terms WHERE content CONTAINS term]) AS score
+      WHERE score>0 RETURN elementId(n) AS id ORDER BY score DESC,elementId(n) LIMIT 8`,{workspaceId,terms});
+    const seedIds=seeds.records.map(r=>r.get('id'));
+    if(!seedIds.length)return {nodes:[],edges:[],seedIds};
+    const result=await tx.run(`MATCH (n) WHERE n.workspaceId=$workspaceId AND elementId(n) IN $seedIds
+      RETURN elementId(n) AS id,n.id AS entityId,labels(n) AS labels,
+      coalesce(n.name,n.title,n.id,'Evidence') AS name,
+      substring(coalesce(n.text,n.description,n.summary,n.abstract,''),0,4800) AS text,
+      coalesce(n.url,n.source,'') AS url,n.workspaceId AS workspaceId,
+      n{.provider,.access,.status,.model,.purpose,.variant,.epochs,.profit_usd,.baseline_profit_usd,.delta_usd,.violations,.exitCode,.error} AS evidence
+      UNION
+      MATCH p=(seed)-[*1..2]-(n) WHERE elementId(seed) IN $seedIds AND all(x IN nodes(p) WHERE x.workspaceId=$workspaceId)
+      RETURN DISTINCT elementId(n) AS id,n.id AS entityId,labels(n) AS labels,
+      coalesce(n.name,n.title,n.id,'Evidence') AS name,
+      substring(coalesce(n.text,n.description,n.summary,n.abstract,''),0,4800) AS text,
+      coalesce(n.url,n.source,'') AS url,n.workspaceId AS workspaceId,
+      n{.provider,.access,.status,.model,.purpose,.variant,.epochs,.profit_usd,.baseline_profit_usd,.delta_usd,.violations,.exitCode,.error} AS evidence LIMIT 80`,{workspaceId,seedIds});
+    const normalize=value=>neo4j.isInt(value)?value.toNumber():value;
+    const nodes=result.records.map(r=>Object.fromEntries(['id','entityId','labels','name','text','url','workspaceId','evidence'].map(key=>[key,key==='evidence'?Object.fromEntries(Object.entries(r.get(key)||{}).filter(([,v])=>v!==null).map(([k,v])=>[k,normalize(v)])):r.get(key)])));
+    const edges=await tx.run(`MATCH (a)-[r]->(b) WHERE a.workspaceId=$workspaceId AND b.workspaceId=$workspaceId AND elementId(a) IN $ids AND elementId(b) IN $ids
+      RETURN elementId(a) AS source,elementId(b) AS target,type(r) AS type LIMIT 300`,{workspaceId,ids:nodes.map(n=>n.id)});
+    return {nodes,seedIds,edges:edges.records.map(r=>({source:r.get('source'),target:r.get('target'),type:r.get('type')}))};
+  });}finally{await session.close();}
+}
+
+export async function graphNodeInWorkspace(workspaceId,nodeId,{driver:graphDriver=getDriver()}={}){
+  const session=graphDriver.session({database:process.env.NEO4J_DATABASE||'neo4j',defaultAccessMode:neo4j.session.READ});
+  try{return await session.executeRead(async tx=>{
+    const result=await tx.run('MATCH (n) WHERE n.workspaceId=$workspaceId AND elementId(n)=$nodeId RETURN elementId(n) AS id LIMIT 1',{workspaceId,nodeId});
+    return result.records.length>0;
+  });}finally{await session.close();}
 }

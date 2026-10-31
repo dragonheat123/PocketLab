@@ -2,6 +2,27 @@
 
 A workspace for each research idea. Discover papers, retrieve source passages, use Nosana to synthesize cited ideas, design a hypothesis, and run the built-in battery benchmark in Daytona. Source evidence, inference receipts, and execution results join one Neo4j graph per workspace. Battery arbitrage is precreated from the existing battery graph.
 
+## Local demo
+
+**[Open Pocket Lab](http://localhost:5173/#/workspaces/battery-arbitrage/overview)** · [Knowledge graph](http://localhost:5173/#/workspaces/battery-arbitrage/graph) · [Experiments](http://localhost:5173/#/workspaces/battery-arbitrage/experiments)
+
+```sh
+npm install
+npm run dev
+```
+
+Keep your existing `.env` and `data/` folder. The local app uses live Neo4j, Nosana inference, and Daytona experiment execution without a demo access code. Check **Lab connections** before presenting.
+
+Suggested demo sequence:
+
+1. Open **Battery arbitrage → Overview** to introduce the question, source library, and experiments.
+2. Open **Knowledge graph** and use **Proof of work** to inspect a purple Nosana inference receipt and a teal Daytona execution record. Drag nodes and follow their evidence connections.
+3. Open **Experiments → Adaptive constraint penalties** to show the retained logs, measured benchmark results, sandbox ID, and exact executed Python.
+4. For a fresh execution, select **500 epochs → Run again in Daytona**. Follow the real output and use **View result in workspace graph** after completion.
+5. Open **Literature** for sources and the cited synthesis notebook. For a new paper search, choose **OpenAlex**; Google Scholar requires a separate SerpApi key.
+
+The attempted web-host deployment is stopped. Daytona's current organization network policy blocks the app host from reaching Neo4j and Nosana; it does not affect this local app's connections. No hosted URL is advertised as the demo.
+
 ## Project presentation
 
 [Download the editable slides](docs/slides/pocket-lab.pptx) · [Project concept](CONCEPT.md) · [Architecture](archi.md)
@@ -55,7 +76,11 @@ cp .env.example .env
 npm run dev
 ```
 
-Open http://localhost:5173. Build with `npm run build`, serve the built application and API with `npm start`, and run backend checks with `npm test`. The server binds to localhost; it is a single-user hackathon app, not a public multi-user service.
+Open http://localhost:5173. Build with `npm run build`, serve the built application and API with `npm start`, and run backend checks with `npm test`. Local development binds to localhost. The hosted demo binds to the sandbox network interface and allows its configured public origin. This remains a shared, single-lab hackathon app; owner access uses one lab code rather than individual user accounts.
+
+## Optional hosting tooling
+
+`npm run deploy:daytona` is retained for a future deployment after Daytona outbound access is enabled. It builds and uploads the full app, uses a persistent volume, and separates the web host from temporary experiment sandboxes. It checks connectivity and can expose a clearly labeled saved graph when live connections are restricted. Hosting is not required for the local demo. Deployment metadata and owner access codes remain in ignored local files; no service credentials are bundled into the frontend.
 
 ## Workspace journey
 
@@ -96,6 +121,7 @@ After connecting Nosana, open the workspace’s Literature section, expand its r
 | `POST /api/workspaces/:id/experiments` | Add a planned experiment with `{ "name": "…", "hypothesis": "…", "sourceNodeId": "optional Neo4j element ID" }` |
 | `POST /api/workspaces/:id/sync` | Retry workspace and experiment graph writes |
 | `GET /api/graph?workspaceId=:id` | Read the workspace graph (up to 500 nodes and 1,500 relationships; defaults to Battery arbitrage) |
+| `POST /api/graph/ask` | Ask the workspace graph with `{ "workspaceId": "battery-arbitrage", "question": "…", "mode": "ask" }`, or use `"mode": "propose"` with an optional question to suggest experiments. Uses bounded Neo4j evidence and optional Nosana synthesis. |
 | `POST /api/research` | Start discovery with `{ "idea": "your research idea", "provider": "scholar", "limit": 6, "workspaceId": "battery-arbitrage" }` (`openalex` is also supported) |
 | `GET /api/research?workspaceId=:id` | List evidence sessions for a workspace |
 | `GET /api/research/:id` | Research status, activity, papers, evidence, synthesis, and graph |
@@ -134,7 +160,7 @@ The discovery worker deduplicates papers, fetches publicly accessible PDFs/artic
 
 Documents with no readable evidence remain listed as metadata only. Empty searches, provider failures, interrupted jobs, inaccessible full text, and malformed or uncited model outputs produce visible errors or explicit partial results. Source-backed does not imply verified scientific truth: generated claims still require review.
 
-The document pipeline persists its extracted evidence into Neo4j: **public document download → PDF/HTML extraction → bounded passages → `Paper` and `Chunk` nodes**. Each `Chunk` stores passage text and its offset and links to its source through `HAS_CHUNK`. Raw PDF/HTML files are not archived in Neo4j. Graph writes occur after retrieval and optional synthesis when Neo4j is configured; failed writes retain local session data for retry. Retrieval currently uses the session passages in memory. See [document ingestion architecture](archi.md#document-ingestion-into-neo4j).
+The document pipeline persists its extracted evidence into Neo4j: **public document download → PDF/HTML extraction → bounded passages → `Paper` and `Chunk` nodes**. Each `Chunk` stores passage text and its offset and links to its source through `HAS_CHUNK`. Raw PDF/HTML files are not archived in Neo4j. Graph writes occur after retrieval and optional synthesis when Neo4j is configured; failed writes retain local session data for retry. Literature questions use session passages in memory. Graph-page questions retrieve persisted Neo4j evidence directly, independently of the visualization limit, and include a bounded neighborhood of up to two hops. See [document ingestion architecture](archi.md#document-ingestion-into-neo4j).
 
 Neo4j stores:
 

@@ -2,14 +2,15 @@ import {promises as fs} from 'node:fs';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {neo4jConfigured,registerWorkspace,persistExperiment,persistExperimentRun,workspaceStats} from './graph.js';
+import {readJson,writeJson} from './storage.js';
+import {snapshotStats} from './graph-snapshots.js';
 
 const directory=path.resolve(process.env.POCKETLAB_DATA_DIR || 'data','workspaces');
 export const workspaces=new Map();
 export const BATTERY_ID='battery-arbitrage';
 export async function saveWorkspace(workspace){
   await fs.mkdir(directory,{recursive:true});
-  const file=path.join(directory,workspace.id+'.json'),temp=file+'.'+randomUUID()+'.tmp';
-  await fs.writeFile(temp,JSON.stringify(workspace));await fs.rename(temp,file);
+  await writeJson(path.join(directory,workspace.id+'.json'),workspace);
 }
 export async function syncWorkspace(workspace,{adoptExisting=false}={}){
   if(!neo4jConfigured()){workspace.graphSync={status:'pending',error:'Neo4j is not configured.'};return;}
@@ -25,7 +26,7 @@ export async function syncWorkspace(workspace,{adoptExisting=false}={}){
 }
 export async function initializeWorkspaces(jobs,saveJob){
   await fs.mkdir(directory,{recursive:true});
-  for(const file of await fs.readdir(directory))if(file.endsWith('.json')){try{const workspace=JSON.parse(await fs.readFile(path.join(directory,file),'utf8'));if(workspace.id)workspaces.set(workspace.id,workspace);}catch{}}
+  for(const file of await fs.readdir(directory))if(file.endsWith('.json')){try{const workspace=await readJson(path.join(directory,file));if(workspace.id)workspaces.set(workspace.id,workspace);}catch{}}
   if(!workspaces.has(BATTERY_ID)){
     const createdAt=new Date().toISOString();
     workspaces.set(BATTERY_ID,{id:BATTERY_ID,name:'Battery arbitrage',idea:'Optimize 24-hour battery arbitrage using differentiable simulation while respecting state-of-charge, power, efficiency, and degradation constraints.',description:'A research workspace for smarter energy storage.',domain:'Energy systems',createdAt,updatedAt:createdAt,experiments:[],graphSync:{status:'pending'},migrated:false});
@@ -49,6 +50,6 @@ export async function createExperiment(workspace,{name,hypothesis,sourceNodeId})
   await saveWorkspace(workspace);return experiment;
 }
 export async function listWorkspaces(jobs){
-  let stats={};if(neo4jConfigured()){try{stats=await workspaceStats([...workspaces.keys()]);}catch{}}
+  let stats={};if(process.env.APP_NETWORK_RESTRICTED==='true')stats=await snapshotStats([...workspaces.keys()]);else if(neo4jConfigured()){try{stats=await workspaceStats([...workspaces.keys()]);}catch{}}
   return [...workspaces.values()].map(w=>({...w,experiments:w.experiments.map(e=>({...e,runs:(e.runs||[]).map(r=>({id:r.id,status:r.status,phase:r.phase,variant:r.variant,epochs:r.epochs,runtime:r.runtime,createdAt:r.createdAt,completedAt:r.completedAt,sandboxId:r.sandboxId,metrics:r.metrics,graphSync:r.graphSync}))})),stats:{nodes:stats[w.id]?.nodes ?? null,sources:stats[w.id]?.sources ?? [...jobs.values()].filter(j=>j.workspaceId===w.id).reduce((n,j)=>n+j.papers.length,0),experiments:w.experiments.length,researchRuns:[...jobs.values()].filter(j=>j.workspaceId===w.id).length}}));
 }
